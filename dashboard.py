@@ -1,13 +1,12 @@
 from datetime import datetime
+import time
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 import streamlit as st
 
 API_URL = "https://iaios.onrender.com/live"
-CONNECT_TIMEOUT = 10
-READ_TIMEOUT = 45
-MAX_POINTS = 60
+REQUEST_TIMEOUT = 20
+REFRESH_SECONDS = 5
+MAX_POINTS = 50
 
 st.set_page_config(page_title="IAiOS SCADA Console", layout="wide")
 
@@ -15,61 +14,52 @@ st.markdown(
     """
     <style>
       .stApp {
-        background: radial-gradient(circle at 85% 0%, #1c2d42 0%, #0d131c 45%);
+        background: radial-gradient(circle at top right, #17212f 0%, #0d131c 45%);
         color: #e9eef6;
       }
       .main-title {
         font-size: 2rem;
-        font-weight: 800;
-        margin-bottom: .15rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
       }
       .subtitle {
-        color: #9db2c8;
-        margin-bottom: 1.1rem;
-      }
-      .status-chip {
-        display: inline-block;
-        border-radius: 999px;
-        border: 1px solid #30435b;
-        color: #b4c6d9;
-        padding: .35rem .7rem;
-        font-size: .8rem;
+        color: #93a4b8;
         margin-bottom: 1rem;
       }
       .scada-card {
-        background: linear-gradient(145deg, #101a27 0%, #1a2738 100%);
-        border: 1px solid #2e4159;
+        background: linear-gradient(140deg, #121b27 0%, #1a2534 100%);
+        border: 1px solid #2a3a50;
         border-radius: 14px;
         padding: 16px;
-        box-shadow: 0 8px 20px rgba(0,0,0,.28);
-        min-height: 122px;
+        box-shadow: 0 6px 18px rgba(0,0,0,.28);
+        min-height: 110px;
       }
       .card-label {
-        color: #8ea4bc;
-        font-size: .78rem;
+        color: #93a4b8;
+        font-size: 0.78rem;
         letter-spacing: .08em;
         text-transform: uppercase;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
       }
       .card-value {
-        color: #f3f8ff;
-        font-size: 1.18rem;
+        font-size: 1.2rem;
         font-weight: 700;
-        line-height: 1.35;
+        color: #f4f8fd;
       }
-      .hint-box {
-        border: 1px dashed #3a5270;
-        background: rgba(58, 82, 112, 0.18);
-        border-radius: 12px;
-        padding: .75rem .9rem;
-        color: #c5d4e2;
-        margin-top: 1rem;
+      .chip {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        border: 1px solid #2a3a50;
+        color: #9cb0c5;
       }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+# Session state
 if "risk_history" not in st.session_state:
     st.session_state.risk_history = []
 if "time_history" not in st.session_state:
@@ -78,8 +68,6 @@ if "last_data" not in st.session_state:
     st.session_state.last_data = None
 if "last_error" not in st.session_state:
     st.session_state.last_error = ""
-if "last_fetch_time" not in st.session_state:
-    st.session_state.last_fetch_time = "--"
 
 
 def classify_risk(risk_value: float) -> str:
@@ -91,62 +79,25 @@ def classify_risk(risk_value: float) -> str:
 
 
 def risk_color(level: str) -> str:
-    return {"LOW": "#27d07d", "MEDIUM": "#f4b740", "HIGH": "#ff6a6a"}.get(level, "#9cb0c5")
-
-
-def build_session() -> requests.Session:
-    session = requests.Session()
-    retries = Retry(
-        total=4,
-        connect=4,
-        read=4,
-        backoff_factor=1.0,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
-    )
-    adapter = HTTPAdapter(max_retries=retries)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
+    return {"LOW": "#1fd479", "MEDIUM": "#f4b740", "HIGH": "#ff5d5d"}.get(level, "#9cb0c5")
 
 
 def fetch_live_data() -> dict:
     try:
-        with build_session() as session:
-            response = session.get(API_URL, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
-            response.raise_for_status()
-            payload = response.json()
-            payload["_fetched_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-            return payload
+        response = requests.get(API_URL, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
     except requests.RequestException as exc:
         return {"status": "error", "message": str(exc)}
 
 
+# Title
 st.markdown("<div class='main-title'>🏭 IAiOS Industrial SCADA Console</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Manual refresh dashboard with resilient Render-to-Streamlit connectivity.</div>", unsafe_allow_html=True)
-st.markdown(f"<div class='status-chip'>Endpoint: {API_URL}</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Live telemetry, AI decisioning, and risk intelligence.</div>", unsafe_allow_html=True)
 
-left, right = st.columns([1, 1])
-with left:
-    refresh = st.button("🔄 Fetch Latest from Render", type="primary", use_container_width=True)
-with right:
-    clear_chart = st.button("🧹 Clear Trend History", use_container_width=True)
-
-if clear_chart:
-    st.session_state.risk_history = []
-    st.session_state.time_history = []
-
-if refresh or st.session_state.last_data is None:
-    incoming = fetch_live_data()
-    if incoming.get("status") != "error":
-        st.session_state.last_data = incoming
-        st.session_state.last_error = ""
-        st.session_state.last_fetch_time = incoming.get("_fetched_at", "--")
-    else:
-        st.session_state.last_error = incoming.get("message", "Unknown connection error")
-
-data = st.session_state.last_data or {"status": "error", "message": "No data loaded yet"}
-status = str(data.get("status", "unknown")).upper()
+# Fetch data
+data = fetch_live_data()
+status = str(data.get("status", "unknown"))
 
 risk_raw = data.get("risk", 0)
 if isinstance(risk_raw, dict):
@@ -154,70 +105,53 @@ if isinstance(risk_raw, dict):
 else:
     try:
         risk_value = float(risk_raw)
-    except (TypeError, ValueError):
+    except:
         risk_value = 0.0
 
 risk_value = max(0.0, min(1.0, risk_value))
 risk_level = classify_risk(risk_value)
 
-decision = str(data.get("decision", "No AI decision available"))
 alert_text = (
     "Critical condition detected. Immediate intervention required."
     if risk_level == "HIGH"
     else "Degradation trend detected. Preventive maintenance advised."
     if risk_level == "MEDIUM"
-    else "Operations stable. No immediate action needed."
+    else "Operations stable."
 )
 
-c1, c2, c3, c4 = st.columns(4)
-c1.markdown(
-    f"<div class='scada-card'><div class='card-label'>System Status</div><div class='card-value'>{status}</div></div>",
-    unsafe_allow_html=True,
-)
-c2.markdown(
-    f"<div class='scada-card'><div class='card-label'>Risk</div><div class='card-value' style='color:{risk_color(risk_level)}'>{risk_level} ({risk_value:.2f})</div></div>",
-    unsafe_allow_html=True,
-)
-c3.markdown(
-    f"<div class='scada-card'><div class='card-label'>Alert</div><div class='card-value' style='font-size:1rem'>{alert_text}</div></div>",
-    unsafe_allow_html=True,
-)
-c4.markdown(
-    f"<div class='scada-card'><div class='card-label'>AI Decision</div><div class='card-value' style='font-size:1rem'>{decision[:180]}</div></div>",
-    unsafe_allow_html=True,
-)
+decision = str(data.get("decision", "No decision available"))
 
-st.markdown("### Failure Risk Gauge")
+# Cards
+col1, col2, col3, col4 = st.columns(4)
+
+col1.markdown(f"<div class='scada-card'><div class='card-label'>System Status</div><div class='card-value'>{status.upper()}</div></div>", unsafe_allow_html=True)
+
+col2.markdown(f"<div class='scada-card'><div class='card-label'>Risk</div><div class='card-value' style='color:{risk_color(risk_level)}'>{risk_level} ({risk_value:.2f})</div></div>", unsafe_allow_html=True)
+
+col3.markdown(f"<div class='scada-card'><div class='card-label'>Alert</div><div class='card-value'>{alert_text}</div></div>", unsafe_allow_html=True)
+
+col4.markdown(f"<div class='scada-card'><div class='card-label'>AI Decision</div><div class='card-value'>{decision[:120]}</div></div>", unsafe_allow_html=True)
+
+# Risk bar
 st.progress(risk_value)
 
-if st.session_state.last_error:
-    st.error(
-        "Unable to fetch latest data from Render right now. "
-        f"Showing last successful snapshot from {st.session_state.last_fetch_time}. "
-        f"Error: {st.session_state.last_error}"
-    )
-
-if st.session_state.last_data:
-    now = datetime.utcnow().strftime("%H:%M:%S")
-    st.session_state.time_history.append(now)
-    st.session_state.risk_history.append(risk_value)
+# History
+now = datetime.utcnow().strftime("%H:%M:%S")
+st.session_state.time_history.append(now)
+st.session_state.risk_history.append(risk_value)
 
 if len(st.session_state.risk_history) > MAX_POINTS:
     st.session_state.risk_history = st.session_state.risk_history[-MAX_POINTS:]
     st.session_state.time_history = st.session_state.time_history[-MAX_POINTS:]
 
-st.markdown("### Risk Trend")
-if st.session_state.risk_history:
-    st.line_chart(
-        {"time": st.session_state.time_history, "risk": st.session_state.risk_history},
-        x="time",
-        y="risk",
-    )
-else:
-    st.info("No trend points yet. Click 'Fetch Latest from Render' to load data.")
+# Chart
+st.subheader("📈 Risk Trend")
+st.line_chart({
+    "time": st.session_state.time_history,
+    "risk": st.session_state.risk_history,
+})
 
-st.markdown(
-    f"<div class='hint-box'>Last successful data pull: {st.session_state.last_fetch_time}. "
-    "Auto-refresh is disabled as requested.</div>",
-    unsafe_allow_html=True,
-)
+# Auto refresh
+st.caption(f"Auto-refresh every {REFRESH_SECONDS}s")
+time.sleep(REFRESH_SECONDS)
+st.rerun()
