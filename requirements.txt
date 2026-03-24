@@ -1,8 +1,8 @@
-fastapi
-uvicorn
-pandas==2.2.2
+fastapi==0.110.0
+uvicorn==0.29.0
+pandas==2.2.2 --only-binary=:all:
 numpy==1.26.4
-scikit-learn
-requests
-streamlit==1.28.2
-altair==4.2.2
+scikit-learn==1.4.2
+requests==2.31.0
+streamlit==1.33.0
+altair==5.2.0
