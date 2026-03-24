@@ -2,16 +2,18 @@ import streamlit as st
 import requests
 import pandas as pd
 
-st.set_page_config(page_title="Industrial AI OS", layout="wide")
+st.set_page_config(page_title="1OS", layout="wide")
 
-st.title("🏭 Industrial AI Operating System")
+st.title("🏭 1OS - Industrial AI OS")
 
-# Auto refresh toggle
-auto_refresh = st.checkbox("Auto Refresh (Live Mode)")
+API_URL = "https://your-render-url.onrender.com/live"
 
 def fetch_data():
-    res = requests.get("https://your-render-url.onrender.com/live")
-    return res.json()
+    try:
+        res = requests.get(API_URL, timeout=10)
+        return res.json()
+    except:
+        return {"status": "error"}
 
 data = fetch_data()
 
@@ -19,35 +21,31 @@ if data["status"] == "live":
 
     col1, col2 = st.columns(2)
 
-    # 🔴 RISK METER
+    # Risk
     with col1:
-        st.subheader("⚠️ Failure Risk")
+        st.subheader("⚠️ Risk Level")
         risk = data["risk"]["failure_risk"]
 
         if risk > 0.7:
-            st.error(f"🔴 HIGH RISK: {risk}")
+            st.error(f"HIGH RISK: {risk}")
         elif risk > 0.4:
-            st.warning(f"🟡 MEDIUM RISK: {risk}")
+            st.warning(f"MEDIUM RISK: {risk}")
         else:
-            st.success(f"🟢 SAFE: {risk}")
+            st.success(f"SAFE: {risk}")
 
-    # 🧠 AI DECISION
+    # Decision
     with col2:
         st.subheader("🧠 AI Decision")
         st.write(data["decision"])
 
-    # 📊 LIVE DATA GRAPH
-    st.subheader("📊 Live Sensor Data")
+    # Graph
+    st.subheader("📊 Sensor Data")
 
     try:
         df = pd.read_csv("live_data.csv").tail(100)
         st.line_chart(df)
     except:
-        st.warning("Waiting for live data...")
+        st.warning("No live data available")
 
 else:
-    st.warning("System waiting for live data...")
-
-# 🔁 Auto refresh
-if auto_refresh:
-    st.rerun()
+    st.warning("System not live")
