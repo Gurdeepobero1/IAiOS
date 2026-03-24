@@ -10,7 +10,7 @@ st.title("🏭 Industrial AI Operating System")
 auto_refresh = st.checkbox("Auto Refresh (Live Mode)")
 
 def fetch_data():
-    res = requests.get("http://127.0.0.1:8000/live")
+    res = requests.get("https://your-render-url.onrender.com/live")
     return res.json()
 
 data = fetch_data()
